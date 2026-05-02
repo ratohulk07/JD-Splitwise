@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Splitwise App</title>
+  <style>
+    body {
+      font-family: Arial;
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+    }
+    input, button, select {
+      margin: 5px;
+      padding: 8px;
+    }
+    .box {
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 8px;
+    }
+    label {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>💰 Smart Expense Splitter</h1>
+
+<!-- PEOPLE -->
+<div class="box">
+  <h3>👥 Add People</h3>
+  <input id="personName" placeholder="Enter name">
+  <button onclick="addPerson()">Add</button>
+  <p><b>People:</b> <span id="peopleList"></span></p>
+</div>
+
+<!-- EXPENSE -->
+<div class="box">
+  <h3>➕ Add Expense</h3>
+
+  <input id="desc" placeholder="Description">
+  <input id="amount" type="number" placeholder="Amount">
+
+  <h4>Paid By</h4>
+  <select id="payer"></select>
+
+  <h4>Participants (who shares this expense)</h4>
+  <div id="participants"></div>
+
+  <button onclick="addExpense()">Add Expense</button>
+</div>
+
+<!-- OUTPUT -->
+<div class="box">
+  <h3>📌 Expenses</h3>
+  <ul id="expenseList"></ul>
+</div>
+
+<div class="box">
+  <h3>⚖️ Balances</h3>
+  <ul id="balanceList"></ul>
+</div>
+
+<div class="box">
+  <h3>🤝 Settlement (Who pays whom)</h3>
+  <ul id="settlementList"></ul>
+</div>
+
+<script>
+let people = [];
+let expenses = [];
+
+/* ---------------- ADD PEOPLE ---------------- */
+function addPerson() {
+  const name = document.getElementById("personName").value.trim();
+  if (!name || people.includes(name)) return;
+
+  people.push(name);
+  document.getElementById("personName").value = "";
+
+  renderPeople();
+}
+
+/* ---------------- RENDER PEOPLE ---------------- */
+function renderPeople() {
+  document.getElementById("peopleList").innerText = people.join(", ");
+
+  // payer dropdown
+  document.getElementById("payer").innerHTML =
+    people.map(p => `<option>${p}</option>`).join("");
+
+  // participant checkboxes
+  document.getElementById("participants").innerHTML =
+    people.map(p =>
+      `<label>
+        <input type="checkbox" value="${p}" checked> ${p}
+      </label>`
+    ).join("");
+}
+
+/* ---------------- ADD EXPENSE ---------------- */
+function addExpense() {
+  const desc = document.getElementById("desc").value;
+  const amount = parseFloat(document.getElementById("amount").value);
+  const paidBy = document.getElementById("payer").value;
+
+  const participants = Array.from(
+    document.querySelectorAll("#participants input:checked")
+  ).map(c => c.value);
+
+  if (!desc || !amount || !paidBy || participants.length === 0) return;
+
+  expenses.push({
+    desc,
+    amount,
+    paidBy,
+    participants
+  });
+
+  document.getElementById("desc").value = "";
+  document.getElementById("amount").value = "";
+
+  render();
+}
+
+/* ---------------- CALCULATE BALANCES ---------------- */
+function calculateBalances() {
+  let balances = {};
+  people.forEach(p => balances[p] = 0);
+
+  expenses.forEach(e => {
+    let share = e.amount / e.participants.length;
+
+    // payer gets full amount
+    balances[e.paidBy] += e.amount;
+
+    // participants owe their share
+    e.participants.forEach(p => {
+      balances[p] -= share;
+    });
+  });
+
+  return balances;
+}
+
+/* ---------------- SETTLEMENT LOGIC ---------------- */
+function getSettlement(balances) {
+  let creditors = [];
+  let debtors = [];
+
+  for (let p in balances) {
+    let val = balances[p];
+
+    if (val > 0) creditors.push({ name: p, amount: val });
+    else if (val < 0) debtors.push({ name: p, amount: -val });
+  }
+
+  creditors.sort((a,b)=>b.amount-a.amount);
+  debtors.sort((a,b)=>b.amount-a.amount);
+
+  let result = [];
+
+  let i = 0, j = 0;
+
+  while (i < debtors.length && j < creditors.length) {
+    let d = debtors[i];
+    let c = creditors[j];
+
+    let pay = Math.min(d.amount, c.amount);
+
+    result.push(`${d.name} pays ${c.name} ₹${pay.toFixed(2)}`);
+
+    d.amount -= pay;
+    c.amount -= pay;
+
+    if (d.amount === 0) i++;
+    if (c.amount === 0) j++;
+  }
+
+  return result;
+}
+
+/* ---------------- RENDER ALL ---------------- */
+function render() {
+
+  // expenses
+  document.getElementById("expenseList").innerHTML =
+    expenses.map(e =>
+      `<li>
+        ${e.desc} - ₹${e.amount} (Paid by ${e.paidBy})<br>
+        👥 Shared by: ${e.participants.join(", ")}
+      </li>`
+    ).join("");
+
+  // balances
+  const balances = calculateBalances();
+
+  document.getElementById("balanceList").innerHTML =
+    Object.entries(balances).map(([p,b]) => {
+      return `<li>${p}: ${b.toFixed(2)}</li>`;
+    }).join("");
+
+  // settlement
+  const settlement = getSettlement(balances);
+
+  document.getElementById("settlementList").innerHTML =
+    settlement.map(s => `<li>${s}</li>`).join("");
+}
+
+/* INIT */
+renderPeople();
+</script>
+
+</body>
+</html>
